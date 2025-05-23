@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Symulacja rzutu ukośnego</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #111;
+      color: white;
+      font-family: sans-serif;
+      text-align: center;
+      overflow-x: hidden;
+    }
+    .controls {
+      padding: 10px;
+      max-width: 400px;
+      margin: 0 auto;
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+    }
+    input[type=range] {
+      width: 100%;
+    }
+    button {
+      margin-top: 15px;
+      padding: 10px 20px;
+      font-size: 16px;
+      background: #10b981;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #result {
+      margin-top: 15px;
+      font-size: 18px;
+      color: #0ef;
+      line-height: 1.6em;
+      min-height: 150px;
+    }
+    canvas {
+      display: block;
+      margin: 20px auto;
+      background: black;
+      touch-action: none;
+      max-width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+  <h2>Symulacja rzutu ukośnego</h2>
+  <div class="controls">
+    <label>Kąt rzutu: <span id="angleVal">45</span>°</label>
+    <input type="range" id="angle" min="0" max="90" value="45" />
+    <label>Prędkość początkowa: <span id="speedVal">30</span> m/s</label>
+    <input type="range" id="speed" min="5" max="50" value="30" />
+    <button id="throwBtn">Rzuć</button>
+    <div id="result"></div>
+  </div>
+
+  <canvas id="canvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const angleSlider = document.getElementById("angle");
+    const speedSlider = document.getElementById("speed");
+    const angleVal = document.getElementById("angleVal");
+    const speedVal = document.getElementById("speedVal");
+    const throwBtn = document.getElementById("throwBtn");
+    const result = document.getElementById("result");
+
+    const g = 9.81;
+    const dt = 0.02;
+    const padding = 60;
+    let angle = 45;
+    let speed = 30;
+    let time = 0;
+    let points = [];
+    let running = false;
+    let scale = 4;
+
+    function determineScale() {
+      const width = window.innerWidth;
+      if (width < 500) scale = 1.5;
+      else if (width < 800) scale = 2;
+      else if (width < 1100) scale = 3;
+      else scale = 4;
+    }
+
+    function setupCanvas() {
+      determineScale();
+      const maxRange = 270;
+      const maxHeight = 140;
+      canvas.width = Math.round(maxRange * scale) + padding * 2;
+      canvas.height = Math.round(maxHeight * scale) + padding * 2;
+    }
+
+    function reset() {
+      time = 0;
+      points = [];
+      running = false;
+    }
+
+    function update() {
+      if (!running) return;
+      time += dt;
+      const rad = angle * Math.PI / 180;
+      const vx = speed * Math.cos(rad);
+      const vy = speed * Math.sin(rad);
+      const x = vx * time;
+      const y = vy * time - 0.5 * g * time * time;
+
+      if (y >= 0) {
+        points.push({ x, y });
+        draw();
+        requestAnimationFrame(update);
+      } else {
+        running = false;
+        const lastX = points[points.length - 1]?.x ?? 0;
+        const maxHeight = Math.pow(speed * Math.sin(rad), 2) / (2 * g);
+        const totalTime = (2 * speed * Math.sin(rad)) / g;
+        const horizontalSpeed = speed * Math.cos(rad);
+        result.innerHTML = `
+          <b>Wyniki:</b><br>
+          Zasięg rzutu: <b>${lastX.toFixed(2)} m</b><br>
+          Maksymalna wysokość: <b>${maxHeight.toFixed(2)} m</b><br>
+          Czas lotu: <b>${totalTime.toFixed(2)} s</b><br>
+          Prędkość w najwyższym punkcie: <b>${horizontalSpeed.toFixed(2)} m/s</b>
+        `;
+        draw();
+      }
+    }
+
+    function drawGrid() {
+      const gridSpacing = Math.round(scale * 10);
+      const baseLabelStep = 10;
+      const labelStep = (scale >= 4) ? 10 : (scale >= 3 ? 20 : 30);
+      const labelOffset = 10 + scale * 2;
+
+      ctx.strokeStyle = "#333";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+
+      for (let x = 0; x <= canvas.width - padding * 2; x += gridSpacing) {
+        ctx.moveTo(padding + x, padding);
+        ctx.lineTo(padding + x, canvas.height - padding);
+      }
+
+      for (let y = 0; y <= canvas.height - padding * 2; y += gridSpacing) {
+        const py = canvas.height - padding - y;
+        ctx.moveTo(padding, py);
+        ctx.lineTo(canvas.width - padding, py);
+      }
+
+      ctx.stroke();
+
+      ctx.fillStyle = "#888";
+      ctx.font = "10px sans-serif";
+
+      // Oznaczenia osi X
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      for (let x = 0; x <= canvas.width - padding * 2; x += gridSpacing) {
+        const val = x / scale;
+        if (val % labelStep === 0) {
+          ctx.fillText(val.toFixed(0) + " m", padding + x, canvas.height - padding + 4);
+        }
+      }
+
+      // Oznaczenia osi Y
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      for (let y = 0; y <= canvas.height - padding * 2; y += gridSpacing) {
+        const val = y / scale;
+        if (val % labelStep === 0) {
+          const py = canvas.height - padding - y;
+          ctx.fillText(val.toFixed(0) + " m", padding - labelOffset, py);
+        }
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawGrid();
+      ctx.beginPath();
+      for (let i = 0; i < points.length; i++) {
+        const px = padding + points[i].x * scale;
+        const py = canvas.height - padding - points[i].y * scale;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.strokeStyle = "lime";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      if (points.length > 0) {
+        const last = points[points.length - 1];
+        const px = padding + last.x * scale;
+        const py = canvas.height - padding - last.y * scale;
+        ctx.beginPath();
+        ctx.arc(px, py, 5, 0, 2 * Math.PI);
+        ctx.fillStyle = "red";
+        ctx.fill();
+      }
+    }
+
+    angleSlider.oninput = () => {
+      angle = parseFloat(angleSlider.value);
+      angleVal.textContent = angle;
+    };
+    speedSlider.oninput = () => {
+      speed = parseFloat(speedSlider.value);
+      speedVal.textContent = speed;
+    };
+    throwBtn.onclick = () => {
+      reset();
+      running = true;
+      result.textContent = "";
+      setupCanvas();
+      requestAnimationFrame(update);
+    };
+
+    window.addEventListener("resize", () => {
+      setupCanvas();
+      draw();
+    });
+
+    setupCanvas();
+    draw();
+  </script>
+</body>
+</html>
